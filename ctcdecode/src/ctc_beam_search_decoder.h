@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include "ThreadPool.h"
 #include "decoder_options.h"
 #include "hotword_scorer.h"
 #include "output.h"
@@ -15,7 +16,7 @@
  *     probs_seq: 2-D vector that each element is a vector of probabilities
  *               over vocabulary of one time step.
  *     DecoderOptions: Contains vocabulary, beam width, cutoff_top_n, cutoff_prob, etc
- *               that are required for beam decoding
+ *                 that are required for beam decoding
  *     ext_scorer: External scorer to evaluate a prefix, which consists of
  *                 n-gram language model scoring and word insertion term.
  *                 Default null, decoding the input sample without scorer.
@@ -28,7 +29,7 @@
 
 std::vector<std::pair<double, Output>>
 ctc_beam_search_decoder(const std::vector<std::vector<double>>& probs_seq,
-                        DecoderOptions* options,
+                        DecoderOptions& options,
                         Scorer* ext_scorer = nullptr,
                         HotwordScorer* hotword_scorer = nullptr);
 
@@ -39,6 +40,8 @@ ctc_beam_search_decoder(const std::vector<std::vector<double>>& probs_seq,
  *                by ctc_beam_search_decoder().
  *     DecoderOptions: Contains vocabulary, beam width, cutoff_top_n, cutoff_prob, etc
  *                 that are required for beam decoding
+ *     ThreadPool: Thread pool to parallelize beam search decoding for multiple input samples
+ *                 present within th batch
  *     ext_scorer: External scorer to evaluate a prefix, which consists of
  *                 n-gram language model scoring and word insertion term.
  *                 Default null, decoding the input sample without scorer.
@@ -50,7 +53,7 @@ ctc_beam_search_decoder(const std::vector<std::vector<double>>& probs_seq,
 */
 std::vector<std::vector<std::pair<double, Output>>>
 ctc_beam_search_decoder_batch(const std::vector<std::vector<std::vector<double>>>& probs_split,
-                              DecoderOptions* options,
+                              DecoderOptions& options,
                               Scorer* ext_scorer = nullptr,
                               HotwordScorer* hotword_scorer = nullptr);
 
@@ -58,7 +61,7 @@ class DecoderState {
     int abs_time_step;
     int space_id;
     int apostrophe_id;
-    DecoderOptions* options;
+    DecoderOptions& options;
     Scorer* ext_scorer;
     HotwordScorer* hotword_scorer;
 
@@ -70,14 +73,14 @@ public:
      *
      * Parameters:
      *     DecoderOptions: Contains vocabulary, beam width, cutoff_top_n, cutoff_prob, etc
-     *                    that are required for beam decoding
+     *                     that are required for beam decoding
      *     ext_scorer: External scorer to evaluate a prefix, which consists of
      *                 n-gram language model scoring and word insertion term.
      *                 Default null, decoding the input sample without scorer.
      *     hotword_scorer: External hotword scorer to boost the score for specific
      *                  words. Default null, decoding the input sample without hotword scorer
      */
-    DecoderState(DecoderOptions* options, Scorer* ext_scorer, HotwordScorer* hotword_scorer);
+    DecoderState(DecoderOptions& options, Scorer* ext_scorer, HotwordScorer* hotword_scorer);
     ~DecoderState() = default;
 
     /* Process logits in decoder stream

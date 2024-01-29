@@ -53,7 +53,9 @@ int main(int argc, char* argv[])
     std::string fst_path = result["fst-path"].as<std::string>();
     int freq_threshold = result["freq-threshold"].as<int>();
 
-    std::cout << "Freq threshold: " << freq_threshold << std::endl;
+    Decoder::init_logger("debug", "build_fst.log");
+
+    Decoder::logger.Log(LogLevel::INFO, "Freq threshold: ", freq_threshold);
 
     construct_fst(vocab_path, lexicon_paths, fst_path, output_path, freq_threshold, true);
 

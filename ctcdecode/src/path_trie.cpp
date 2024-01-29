@@ -3,41 +3,36 @@
 #include "decoder_utils.h"
 
 PathTrie::PathTrie()
+    : log_prob_b_prev(-NUM_FLT_INF)
+    , log_prob_nb_prev(-NUM_FLT_INF)
+    , log_prob_b_cur(-NUM_FLT_INF)
+    , log_prob_nb_cur(-NUM_FLT_INF)
+    , log_prob_b_prev_hw(-NUM_FLT_INF)
+    , log_prob_nb_prev_hw(-NUM_FLT_INF)
+    , log_prob_b_cur_hw(-NUM_FLT_INF)
+    , log_prob_nb_cur_hw(-NUM_FLT_INF)
+    , log_prob_c(-NUM_FLT_INF)
+    , score(-NUM_FLT_INF)
+    , score_hw(-NUM_FLT_INF)
+    , ROOT_(-1)
+    , character(-1)
+    , timestep(0)
+    , exists_(true)
+    , parent(nullptr)
+    , is_hotpath_(false)
+    , hotword_score(0.0)
+    , shortest_unigram_length(0)
+    , hotword_weight(0.0)
+    , partial_hotword("")
+    , lexicon_(nullptr)
+    , lexicon_state_(0)
+    , has_lexicon_(false)
+    , is_word_start_char_(false)
+    , matcher_(nullptr)
+    , hotword_matcher(nullptr)
+    , hotword_dictionary_state(0)
+    , hotword_match_len(0)
 {
-    log_prob_b_prev = -NUM_FLT_INF;
-    log_prob_nb_prev = -NUM_FLT_INF;
-    log_prob_b_cur = -NUM_FLT_INF;
-    log_prob_nb_cur = -NUM_FLT_INF;
-
-    log_prob_b_prev_hw = -NUM_FLT_INF;
-    log_prob_nb_prev_hw = -NUM_FLT_INF;
-    log_prob_b_cur_hw = -NUM_FLT_INF;
-    log_prob_nb_cur_hw = -NUM_FLT_INF;
-
-    log_prob_c = -NUM_FLT_INF;
-    score = -NUM_FLT_INF;
-    score_hw = -NUM_FLT_INF;
-
-    ROOT_ = -1;
-    character = ROOT_;
-    timestep = 0;
-    exists_ = true;
-    parent = nullptr;
-    is_hotpath_ = false;
-    hotword_score = 0.0;
-    shortest_unigram_length = 0;
-    hotword_weight = 0.0;
-    partial_hotword = "";
-
-    lexicon_ = nullptr;
-    lexicon_state_ = 0;
-    has_lexicon_ = false;
-    is_word_start_char_ = false;
-
-    matcher_ = nullptr;
-    hotword_matcher = nullptr;
-    hotword_dictionary_state = 0;
-    hotword_match_len = 0;
 }
 
 PathTrie::~PathTrie()

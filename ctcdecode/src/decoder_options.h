@@ -24,7 +24,7 @@ public:
      *      unk_score (float): Extra score to be added when an unknown word forms ( default = '-5' )
      *      token_separator (char): prefix of the bpe tokens ( default = '#' )
      */
-    DecoderOptions(std::vector<std::string> vocab,
+    DecoderOptions(const std::vector<std::string>& vocab,
                    size_t cutoff_top_n,
                    double cutoff_prob,
                    size_t beam_width,
@@ -52,7 +52,7 @@ public:
      * Parameters:
      *      vocab: A vector of vocabulary (labels).
      */
-    DecoderOptions(std::vector<std::string> vocab)
+    DecoderOptions(const std::vector<std::string>& vocab)
         : vocab(vocab)
     {
     }

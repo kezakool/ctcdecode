@@ -1,5 +1,5 @@
 #include "hotword_scorer.h"
-#include "decoder_utils.h"
+#include "decoder.h"
 
 /**
  * @brief Initializes the vocabulary list, hotwords, hotword weights and creates the hotword FST
@@ -10,20 +10,18 @@ HotwordScorer::HotwordScorer(const std::vector<std::string>& vocab_list,
                              char token_separator,
                              bool is_bpe_based)
     : vocabulary(vocab_list)
+    , hotwords(hotwords)
+    , hotword_weights(hotword_weights)
+    , token_separator(token_separator)
+    , is_bpe_based_(is_bpe_based)
+    , SPACE_ID_(-1)
+    , dict_size_(0)
+    , FSTZERO(fst::TropicalWeight::Zero())
+    , delimiter_("$$")
+    , dictionary(nullptr)
 {
-
-    this->hotword_weights = hotword_weights;
-    this->hotwords = hotwords;
-
-    dictionary = nullptr;
-
-    dict_size_ = 0;
-
-    SPACE_ID_ = -1;
-    is_bpe_based_ = is_bpe_based;
-    FSTZERO = fst::TropicalWeight::Zero();
-    delimiter_ = "$$";
-    token_separator = token_separator;
+    Decoder::logger.Log(
+        LogLevel::INFO, "Initializing hotword scorer with ", hotwords.size(), " hotwords");
     setup(vocab_list);
 }
 
@@ -77,6 +75,10 @@ bool HotwordScorer::add_word_to_hotword_dictionary(const std::vector<std::string
                 int_word.push_back(int_c->second);
                 hotword += std::to_string(int_c->second) + delimiter_;
             } else {
+                Decoder::logger.Log(LogLevel::INFO,
+                                    "Character ",
+                                    c,
+                                    " not found in vocabulary list. Skipping this hotword");
                 return false; // return without adding
             }
         }

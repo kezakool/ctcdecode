@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "fst/fstlib.h"
+
 #include "path_trie.h"
 
 class HotwordScorer {

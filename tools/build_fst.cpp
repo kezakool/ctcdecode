@@ -13,7 +13,8 @@ std::vector<std::string> get_bpe_vocab(const std::string vocab_path)
     std::ifstream inputFile(vocab_path);
     std::vector<std::string> labels;
     if (!inputFile.is_open()) {
-        std::cerr << "Failed to open the the vocabulary file." << std::endl;
+        Decoder::logger.Log(LogLevel::ERROR, "Failed to open the the vocabulary file.");
+        exit(EXIT_FAILURE);
     }
 
     std::string line;
@@ -21,7 +22,7 @@ std::vector<std::string> get_bpe_vocab(const std::string vocab_path)
         labels.push_back(line);
     }
 
-    std::cout << "Size of labels: " << labels.size() << std::endl;
+    Decoder::logger.Log(LogLevel::INFO, "Size of labels: ", labels.size());
 
     inputFile.close();
 
@@ -57,13 +58,16 @@ fst::StdVectorFst* read_fst(const std::string input_path)
     // Read the FST from the file
     fst::StdVectorFst* dict = fst::StdVectorFst::Read(input_path);
     if (!dict) {
-        std::cerr << "Failed to read FST from file: " << input_path << std::endl;
+        Decoder::logger.Log(LogLevel::ERROR, "Failed to read FST from file: ", input_path);
+        exit(EXIT_FAILURE);
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    std::cout << "Time taken for reading the FST: " << duration << " seconds" << std::endl;
-    std::cout << "Number of states in FST are " << dict->NumStates() << std::endl;
+
+    Decoder::logger.Log(LogLevel::INFO, "Time taken for reading the FST: ", duration, " seconds");
+    Decoder::logger.Log(LogLevel::INFO, "Number of states in FST are ", dict->NumStates());
+
     return dict;
 }
 
@@ -79,7 +83,8 @@ void write_fst(fst::StdVectorFst* dictionary, const std::string output_path)
     dictionary->Write(output_path);
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    std::cout << "Time taken for writing the FST to file: " << duration << " seconds" << std::endl;
+    Decoder::logger.Log(
+        LogLevel::INFO, "Time taken for writing the FST to file: ", duration, " seconds");
 }
 
 /**
@@ -97,7 +102,7 @@ void optimize_fst(fst::StdVectorFst* dictionary)
 
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    std::cout << "Time taken to optimize FST: " << duration << " seconds" << std::endl;
+    Decoder::logger.Log(LogLevel::INFO, "Time taken to optimize FST: ", duration, " seconds");
 }
 
 /**
@@ -120,7 +125,8 @@ bool add_word_to_fst(const std::vector<std::string>& characters,
         auto int_c = char_map.find(c);
         int symbol_id;
         if (int_c == char_map.end()) {
-            std::cerr << "Character/token not found\n";
+            Decoder::logger.Log(LogLevel::ERROR, "Character/token not found: ", c);
+            exit(EXIT_FAILURE);
         } else {
             symbol_id = int_c->second;
         }
@@ -170,16 +176,17 @@ int parse_lexicon_and_add_to_fst(const std::string& lexicon_path,
     int word_count = 0;
     std::ifstream file(lexicon_path);
     if (!file) {
-        std::cerr << "Error opening lexicon file." << std::endl;
+        Decoder::logger.Log(LogLevel::ERROR, "Error opening lexicon file: ", lexicon_path);
+        exit(EXIT_FAILURE);
     }
 
-    std::cout << "Loading words from unigrams path provided\n";
+    Decoder::logger.Log(LogLevel::INFO, "Loading words from unigrams path provided");
 
     std::string line;
     fst::StdVectorFst::StateId start_state;
 
     if (dictionary->NumStates() == 0) {
-        std::cout << "Setting dictionary start state\n";
+        Decoder::logger.Log(LogLevel::INFO, "Setting dictionary start state");
         start_state = dictionary->AddState();
         assert(start_state == 0);
         dictionary->SetStart(start_state);
@@ -210,15 +217,16 @@ int parse_lexicon_and_add_to_fst(const std::string& lexicon_path,
         }
 
         if (count % 100000 == 0) {
-            std::cout << "Processed " << count << " records\n";
+            Decoder::logger.Log(LogLevel::INFO, "Processed ", count, " records");
         }
 
         if (characters.size() > 0 && !skip) {
             word_count += add_word_to_fst(characters, char_map, dictionary, start_state);
         }
     }
-    std::cout << "Constructed the fst for the given lexicon path: " << lexicon_path << std::endl;
-    std::cout << "Number of words in the given path are " << count << std::endl;
+    Decoder::logger.Log(
+        LogLevel::INFO, "Constructed the fst for the given lexicon path: ", lexicon_path);
+    Decoder::logger.Log(LogLevel::INFO, "Number of words in the given path are ", count);
 
     return word_count;
 }
@@ -252,7 +260,7 @@ void construct_fst(const std::string vocab_path,
 
     // Load the FST from the given file
     if (!fst_path.empty()) {
-        std::cout << "Reading the fst from " << fst_path << std::endl;
+        Decoder::logger.Log(LogLevel::INFO, "Reading the fst from ", fst_path);
         dictionary = read_fst(fst_path);
     } else {
         dictionary = new fst::StdVectorFst;
@@ -265,12 +273,13 @@ void construct_fst(const std::string vocab_path,
     for (auto lexicon_path : lexicon_paths) {
         int word_count
             = parse_lexicon_and_add_to_fst(lexicon_path, dictionary, char_map, freq_threshold);
-        std::cout << "Number of words added to the dictionary are " << word_count << std::endl;
+        Decoder::logger.Log(
+            LogLevel::INFO, "Number of words added to the dictionary are ", word_count);
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    std::cout << "Time taken to create FST: " << duration << " seconds" << std::endl;
+    Decoder::logger.Log(LogLevel::INFO, "Time taken to create FST: ", duration, " seconds");
 
     // Write the FST to the given output file
     // output file with `.opt` extension will be created if optimize is true
@@ -281,11 +290,11 @@ void construct_fst(const std::string vocab_path,
     }
 
     // Number of states in FST
-    std::cout << "Number of states in FST are " << dictionary->NumStates() << std::endl;
+    Decoder::logger.Log(LogLevel::INFO, "Number of states in FST are ", dictionary->NumStates());
 
     endTime = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
-    std::cout << "Total time taken: " << duration << " seconds" << std::endl;
+    Decoder::logger.Log(LogLevel::INFO, "Total time taken: ", duration, " seconds");
 
     // delete the FST
     delete dictionary;

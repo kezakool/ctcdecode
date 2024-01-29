@@ -6,13 +6,10 @@
 #include <vector>
 
 #include "fst/log.h"
+
+#include "constants.h"
 #include "output.h"
 #include "path_trie.h"
-
-const float NUM_FLT_INF = std::numeric_limits<float>::max();
-const float NUM_FLT_MIN = std::numeric_limits<float>::min();
-const int NUM_INT_INF = std::numeric_limits<int>::max();
-const float NUM_FLT_LOGE = 0.4342944819;
 
 // inline function for validation check
 inline void check(bool x, const char* expr, const char* file, int line, const char* err)
@@ -62,8 +59,7 @@ std::vector<std::pair<size_t, float>> get_pruned_log_probs(const std::vector<dou
                                                            int log_input);
 
 // Get beam search result from prefixes in trie tree
-std::vector<std::pair<double, Output>>
-get_beam_search_result(const std::vector<PathTrie*>& prefixes, size_t beam_size);
+ScoredOuputEntries get_beam_search_result(const std::vector<PathTrie*>& prefixes, size_t beam_size);
 
 // Functor for prefix comparison
 bool prefix_compare(const PathTrie* x, const PathTrie* y);

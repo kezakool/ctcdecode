@@ -11,10 +11,10 @@ std::vector<std::pair<size_t, float>> get_pruned_log_probs(const std::vector<dou
                                                            size_t cutoff_top_n,
                                                            int log_input)
 {
-    std::vector<std::pair<int, double>> prob_idx;
+    std::vector<std::pair<int, double>> prob_idx(prob_step.size());
     double log_cutoff_prob = log(cutoff_prob);
     for (size_t i = 0; i < prob_step.size(); ++i) {
-        prob_idx.push_back(std::pair<int, double>(i, prob_step[i]));
+        prob_idx[i] = std::pair<int, double>(i, prob_step[i]);
     }
     // pruning of vacobulary
     size_t cutoff_len = prob_step.size();
@@ -36,17 +36,16 @@ std::vector<std::pair<size_t, float>> get_pruned_log_probs(const std::vector<dou
         prob_idx
             = std::vector<std::pair<int, double>>(prob_idx.begin(), prob_idx.begin() + cutoff_len);
     }
-    std::vector<std::pair<size_t, float>> log_prob_idx;
+    std::vector<std::pair<size_t, float>> log_prob_idx(cutoff_len);
     for (size_t i = 0; i < cutoff_len; ++i) {
-        log_prob_idx.push_back(std::pair<int, float>(
-            prob_idx[i].first,
-            log_input ? prob_idx[i].second : log(prob_idx[i].second + NUM_FLT_MIN)));
+        log_prob_idx[i] = std::pair<int, float>(prob_idx[i].first,
+                                                log_input ? prob_idx[i].second
+                                                          : log(prob_idx[i].second + NUM_FLT_MIN));
     }
     return log_prob_idx;
 }
 
-std::vector<std::pair<double, Output>>
-get_beam_search_result(const std::vector<PathTrie*>& prefixes, size_t beam_size)
+ScoredOuputEntries get_beam_search_result(const std::vector<PathTrie*>& prefixes, size_t beam_size)
 {
     // allow for the post processing
     std::vector<PathTrie*> space_prefixes;
@@ -57,7 +56,7 @@ get_beam_search_result(const std::vector<PathTrie*>& prefixes, size_t beam_size)
     }
 
     std::sort(space_prefixes.begin(), space_prefixes.end(), prefix_compare);
-    std::vector<std::pair<double, Output>> output_vecs;
+    ScoredOuputEntries output_vecs;
     for (size_t i = 0; i < beam_size && i < space_prefixes.size(); ++i) {
         std::vector<int> output;
         std::vector<int> timesteps;

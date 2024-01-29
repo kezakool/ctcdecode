@@ -1,6 +1,7 @@
 #ifndef BUILD_FST_H
 #define BUILD_FST_H
 
+#include "decoder.h"
 #include "fst/fst.h"
 #include "fst/fstlib.h"
 

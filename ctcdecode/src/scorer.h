@@ -12,18 +12,6 @@
 #include "decoder_utils.h"
 #include "path_trie.h"
 
-const double OOV_SCORE = -1000.0;
-const std::string START_TOKEN = "<s>";
-const std::string UNK_TOKEN = "[UNK]";
-const std::string END_TOKEN = "</s>";
-
-enum TokenizerType { CHAR = 0, BPE = 1, WORD = 2 };
-
-static std::map<std::string, TokenizerType> StringToTokenizerType
-    = { { "character", TokenizerType::CHAR },
-        { "bpe", TokenizerType::BPE },
-        { "word", TokenizerType::WORD } };
-
 // Implement a callback to retrive the lexicon of language model.
 class RetriveStrEnumerateVocab : public lm::EnumerateVocab {
 public:

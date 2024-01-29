@@ -28,6 +28,11 @@ class CTCBeamDecoder(object):
         lm_type (str): Whether the language model file is character, bpe or word based
         token_separator (str): prefix of the bpe tokens. Default value is "#" and it is always assumed that the tokens
             starting with this prefix are meant to be merged with tokens that doesn't contain this prefix
+        lexicon_fst_path (str): Path to the fst model file for decoding. It can be either be optimized or not. If not provided then
+            fst will not be used for decoding. Default value is None.
+        log_filepath (str): Path to the log file
+        log_level (str): Loglevel for the logger, if level is "none", nothing will be written to the
+                        output file. Other options are "debug", "info" and "error"
     """
 
     def __init__(
@@ -47,32 +52,26 @@ class CTCBeamDecoder(object):
         lm_type: str = "character",
         token_separator: str = "#",
         lexicon_fst_path: Optional[str] = None,
+        log_filepath: str = "CTCBeamDecoderLogger.txt",
+        log_level: str = "none",
     ):
         self.cutoff_top_n = cutoff_top_n
         self._beam_width = beam_width
-        self._scorer = None
         self._num_processes = num_processes
         self._labels = list(labels)  # Ensure labels are a list
         self._num_labels = len(labels)
         self._blank_id = blank_id
         self._log_probs = True if log_probs_input else False
+        self._is_bpe_based = is_bpe_based
         self.token_separator = token_separator
 
         lexicon_fst_path = lexicon_fst_path if lexicon_fst_path is not None else ""
 
-        if model_path:
-            self._scorer = ctc_decode.paddle_get_scorer(
-                alpha,
-                beta,
-                model_path.encode(),
-                self._labels,
-                lm_type,
-                lexicon_fst_path.encode(),
-            )
         self._is_bpe_based = is_bpe_based
         self._cutoff_prob = cutoff_prob
+        self._model_path = model_path
 
-        self.decoder_options = ctc_decode.paddle_get_decoder_options(
+        self._decoder = ctc_decode.paddle_get_decoder(
             self._labels,
             cutoff_top_n,
             cutoff_prob,
@@ -83,7 +82,18 @@ class CTCBeamDecoder(object):
             is_bpe_based,
             unk_score,
             token_separator,
+            log_filepath,
+            log_level,
         )
+        if model_path:
+            ctc_decode.create_lm_scorer(
+                self._decoder,
+                alpha,
+                beta,
+                model_path.encode(),
+                lm_type,
+                lexicon_fst_path.encode(),
+            )
 
     def create_hotword_scorer(
         self,
@@ -109,9 +119,7 @@ class CTCBeamDecoder(object):
         ):
             raise ValueError("Hotword weight list and Hotwords length doesn't match.")
 
-        hotword_scorer = ctc_decode.get_hotword_scorer(
-            self.decoder_options, hotwords, hotword_weight, self.token_separator
-        )
+        hotword_scorer = ctc_decode.get_hotword_scorer(self._decoder, hotwords, hotword_weight)
 
         return hotword_scorer
 
@@ -170,80 +178,57 @@ class CTCBeamDecoder(object):
             hotword_scorer = self.create_hotword_scorer(hotwords, hotword_weight)
 
         output = torch.IntTensor(batch_size, self._beam_width, max_seq_len).cpu().int()
-        timesteps = (
-            torch.IntTensor(batch_size, self._beam_width, max_seq_len).cpu().int()
-        )
+        timesteps = torch.IntTensor(batch_size, self._beam_width, max_seq_len).cpu().int()
         scores = torch.FloatTensor(batch_size, self._beam_width).cpu().float()
         out_seq_len = torch.zeros(batch_size, self._beam_width).cpu().int()
 
-        if not self._scorer and not hotword_scorer:
-            ctc_decode.paddle_beam_decode(
+        if not hotword_scorer:
+            decoder_input = ctc_decode.get_decoder_input(
                 probs,
                 seq_lens,
-                self.decoder_options,
-                output,
-                timesteps,
-                scores,
-                out_seq_len,
-            )
-        elif self._scorer and not hotword_scorer:
-            ctc_decode.paddle_beam_decode_with_lm(
-                probs,
-                seq_lens,
-                self.decoder_options,
-                self._scorer,
-                output,
-                timesteps,
-                scores,
-                out_seq_len,
-            )
-        elif not self._scorer and hotword_scorer:
-            ctc_decode.paddle_beam_decode_with_hotwords(
-                probs,
-                seq_lens,
-                self.decoder_options,
-                hotword_scorer,
-                output,
-                timesteps,
-                scores,
-                out_seq_len,
             )
         else:
-            ctc_decode.paddle_beam_decode_with_lm_and_hotwords(
+            decoder_input = ctc_decode.get_decoder_input_with_hotwords(
                 probs,
                 seq_lens,
-                self.decoder_options,
-                self._scorer,
                 hotword_scorer,
-                output,
-                timesteps,
-                scores,
-                out_seq_len,
             )
+
+        ctc_decode.paddle_beam_decode(
+            decoder_input,
+            self._decoder,
+            output,
+            timesteps,
+            scores,
+            out_seq_len,
+        )
 
         if hotwords:
             self.delete_hotword_scorer(hotword_scorer)
 
+        ctc_decode.paddle_release_decoder_input(decoder_input)
+
         return output, scores, timesteps, out_seq_len
 
     def character_based(self):
-        return ctc_decode.is_character_based(self._scorer) if self._scorer else None
+        return ctc_decode.is_character_based(self._decoder) if self._model_path else None
 
     def max_order(self):
-        return ctc_decode.get_max_order(self._scorer) if self._scorer else None
+        return ctc_decode.get_max_order(self._decoder) if self._model_path else None
 
     def dict_size(self):
-        return ctc_decode.get_dict_size(self._scorer) if self._scorer else None
+        return ctc_decode.get_lexicon_size(self._decoder) if self._model_path else None
 
     def reset_params(self, alpha, beta):
-        if self._scorer is not None:
-            ctc_decode.reset_params(self._scorer, alpha, beta)
+        if self._model_path is not None:
+            ctc_decode.reset_params(self._decoder, alpha, beta)
 
     def __del__(self):
-        if self._scorer is not None:
-            ctc_decode.paddle_release_scorer(self._scorer)
-        if self.decoder_options:
-            ctc_decode.paddle_release_decoder_options(self.decoder_options)
+        ctc_decode.paddle_release_resources(self._decoder)
+
+    def delete_hotword_scorer(self, hw_scorer=None):
+        if hw_scorer:
+            ctc_decode.paddle_release_hotword_scorer(hw_scorer)
 
     def delete_hotword_scorer(self, hw_scorer=None):
         if hw_scorer:
@@ -274,6 +259,9 @@ class OnlineCTCBeamDecoder(object):
             starting with this prefix are meant to be merged with tokens that doesn't contain this prefix
         lexicon_fst_path (str): Path to the fst model file for decoding. It can be either be optimized or not. If not provided then
             fst will not be used for decoding. Default value is None.
+        log_filepath (str): Path to the log file
+        log_level (str): Loglevel for the logger, if level is "none", nothing will be written to the
+                        output file. Other options are "debug", "info" and "error"
     """
 
     def __init__(
@@ -293,18 +281,20 @@ class OnlineCTCBeamDecoder(object):
         lm_type: str = "character",
         token_separator: str = "#",
         lexicon_fst_path: Optional[str] = None,
+        log_filepath: str = "CTCBeamDecoderLogger.txt",
+        log_level: str = "none",
     ):
         self._cutoff_top_n = cutoff_top_n
         self._beam_width = beam_width
-        self._scorer = None
         self._num_processes = num_processes
         self._labels = list(labels)  # Ensure labels are a list
         self._num_labels = len(labels)
         self._blank_id = blank_id
         self._log_probs = 1 if log_probs_input else 0
+        self._model_path = model_path
         lexicon_fst_path = lexicon_fst_path if lexicon_fst_path is not None else ""
 
-        self.decoder_options = ctc_decode.paddle_get_decoder_options(
+        self._decoder = ctc_decode.paddle_get_decoder(
             self._labels,
             cutoff_top_n,
             cutoff_prob,
@@ -315,17 +305,20 @@ class OnlineCTCBeamDecoder(object):
             is_bpe_based,
             unk_score,
             token_separator,
+            log_filepath,
+            log_level,
         )
 
         if model_path:
-            self._scorer = ctc_decode.paddle_get_scorer(
+            ctc_decode.create_lm_scorer(
+                self._decoder,
                 alpha,
                 beta,
                 model_path.encode(),
-                self._labels,
                 lm_type,
                 lexicon_fst_path.encode(),
             )
+
         self._cutoff_prob = cutoff_prob
 
     def decode(self, probs, states, is_eos_s, seq_lens=None):
@@ -380,13 +373,13 @@ class OnlineCTCBeamDecoder(object):
         return res_beam_results, scores, res_timesteps, out_seq_len
 
     def character_based(self):
-        return ctc_decode.is_character_based(self._scorer) if self._scorer else None
+        return ctc_decode.is_character_based(self._decoder) if self._model_path else None
 
     def max_order(self):
-        return ctc_decode.get_max_order(self._scorer) if self._scorer else None
+        return ctc_decode.get_max_order(self._decoder) if self._model_path else None
 
     def dict_size(self):
-        return ctc_decode.get_dict_size(self._scorer) if self._scorer else None
+        return ctc_decode.get_lexicon_size(self._decoder) if self._model_path else None
 
     def reset_state(state):
         ctc_decode.paddle_release_state(state)
@@ -401,10 +394,7 @@ class DecoderState:
     """
 
     def __init__(self, decoder):
-        self.state = ctc_decode.paddle_get_decoder_state(
-            decoder.decoder_options,
-            decoder._scorer,
-        )
+        self.state = ctc_decode.paddle_get_decoder_state(decoder._decoder)
 
     def __del__(self):
         ctc_decode.paddle_release_state(self.state)

@@ -9,7 +9,7 @@
 #include "util/string_piece.hh"
 #include "util/tokenize_piece.hh"
 
-#include "decoder_utils.h"
+#include "decoder.h"
 
 using namespace lm::ngram;
 
@@ -19,17 +19,20 @@ Scorer::Scorer(double alpha,
                const std::vector<std::string>& vocab_list,
                const std::string& lm_type,
                const std::string& lexicon_fst_path)
+    : alpha(alpha)
+    , beta(beta)
+    , lm_type(StringToTokenizerType[lm_type])
+    , max_order_(0)
+    , dict_size_(0)
+    , SPACE_ID_(-1)
+    , has_lexicon_(false)
+    , language_model_(nullptr)
+    , lexicon(nullptr)
+    , char_list_(vocab_list)
 {
-    this->alpha = alpha;
-    this->beta = beta;
-    this->lm_type = StringToTokenizerType[lm_type];
-    lexicon = nullptr;
-    language_model_ = nullptr;
-    max_order_ = 0;
-    dict_size_ = 0;
-    SPACE_ID_ = -1;
+    Decoder::logger.Log(
+        LogLevel::INFO, "Initializing LM scorer with alpha: ", alpha, ", beta: ", beta);
 
-    char_list_ = vocab_list;
     setup(lm_path, vocab_list, lexicon_fst_path);
 }
 
@@ -210,7 +213,7 @@ void Scorer::load_lexicon_from_fst_file(const std::string& lexicon_fst_path)
     // Read the FST from the file
     fst::StdVectorFst* dict = fst::StdVectorFst::Read(lexicon_fst_path);
     if (!dict) {
-        std::cerr << "Failed to read FST from file: " << lexicon_fst_path << std::endl;
+        Decoder::logger.Log(LogLevel::ERROR, "Failed to read FST from file: ", lexicon_fst_path);
         exit(EXIT_FAILURE);
     }
 
@@ -220,10 +223,17 @@ void Scorer::load_lexicon_from_fst_file(const std::string& lexicon_fst_path)
     // Convert duration to seconds
     auto seconds = duration / 1000000.0;
 
-    std::cout << "Total time taken for reading the FST file: " << seconds << " seconds"
-              << std::endl;
+    Decoder::logger.Log(
+        LogLevel::INFO, "Total time taken for reading the FST file: ", seconds, " seconds");
 
     this->lexicon = dict;
+
+    Decoder::logger.Log(LogLevel::INFO, "Number of states in the lexicon: ", dict->NumStates());
+
+    if (dict->NumStates() == 0) {
+        Decoder::logger.Log(LogLevel::INFO, "Lexicon is empty!");
+        has_lexicon_ = false;
+    }
 }
 
 /**
@@ -240,6 +250,7 @@ void Scorer::load_lexicon(bool add_space, const std::string& lexicon_fst_path)
     has_lexicon_ = true;
 
     if (lexicon_fst_path.empty()) {
+        Decoder::logger.Log(LogLevel::INFO, "Creating FST lexicon from LM vocabulary");
         for (const auto& word : vocabulary_) {
             const auto& characters = split_utf8_str(word);
             bool added
@@ -271,13 +282,7 @@ void Scorer::load_lexicon(bool add_space, const std::string& lexicon_fst_path)
          */
         fst::Minimize(new_lexicon);
         this->lexicon = new_lexicon;
-
     } else {
         load_lexicon_from_fst_file(lexicon_fst_path);
-    }
-
-    if (lexicon.NumStates() == 0) {
-        std::cout << "Lexicon is empty" << std::endl;
-        has_lexicon_ = false;
     }
 }

@@ -86,9 +86,7 @@ lib_sources = (
     + glob.glob("third_party/kenlm/util/double-conversion/*.cc")
     + glob.glob("third_party/openfst-1.8.2/src/lib/*.cc")
 )
-lib_sources = [
-    fn for fn in lib_sources if not (fn.endswith("main.cc") or fn.endswith("test.cc"))
-]
+lib_sources = [fn for fn in lib_sources if not (fn.endswith("main.cc") or fn.endswith("test.cc"))]
 
 third_party_includes = [
     os.path.realpath(os.path.join("third_party", lib)) for lib in third_party_libs

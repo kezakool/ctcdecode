@@ -40,6 +40,6 @@ file(GLOB CTC_SOURCES ${CMAKE_SOURCE_DIR}/ctcdecode/src/*.cpp)
 add_library(ctcdecode STATIC "${CTC_SOURCES}")
 
 target_include_directories(ctcdecode PUBLIC ${CMAKE_SOURCE_DIR}/third_party/kenlm ${CMAKE_SOURCE_DIR}/third_party/openfst-1.8.2/src/include ${CMAKE_SOURCE_DIR}/third_party/utf8 ${CMAKE_SOURCE_DIR}/third_party/ThreadPool ${CMAKE_SOURCE_DIR}/third_party/boost_1_67_0  ${CMAKE_SOURCE_DIR}/ctcdecode/src ) 
-target_link_libraries(ctcdecode PUBLIC "${TORCH_LIBRARIES}"  kenlm fst pybind11::module)
+target_link_libraries(ctcdecode PUBLIC "${TORCH_LIBRARIES}" kenlm fst pybind11::module ${Python_LIBRARIES})
 
 # message("${CTC_SOURCES}")
